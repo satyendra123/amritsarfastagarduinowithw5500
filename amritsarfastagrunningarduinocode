@@ -1,0 +1,222 @@
+//EXAMPLE-1 ENTRY GATE
+#include <SPI.h>
+#include <Ethernet.h>
+#include <avr/wdt.h> // Include the watchdog library
+
+#define relayPin 9
+
+byte mac[] = {0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED};
+IPAddress ip(192, 168, 1, 151);
+
+EthernetServer server(7000);
+EthernetClient client;
+
+String clientData = "";
+
+boolean IsClientConnected = false;
+
+unsigned long currentMillis, previousMillis, reconnectMillis;
+const unsigned long healthPacketInterval = 3000; // 3 seconds
+const unsigned long reconnectInterval = 5000;   // 5 seconds
+
+void setup() {
+  Ethernet.begin(mac, ip);
+  server.begin();
+  Serial.begin(9600);
+
+  while (!Serial) {
+    ; // wait for the serial port to connect, needed for native USB port only
+  }
+
+  Serial.print("Machine Gate IP: ");
+  Serial.println(Ethernet.localIP());
+
+  pinMode(relayPin, OUTPUT);
+  digitalWrite(relayPin, HIGH);
+
+  // Enable the watchdog timer to reset the Arduino upon power interruption
+  wdt_enable(WDTO_4S); // 4-second timeout
+
+  IsClientConnected = false;
+
+  currentMillis = 0;
+  previousMillis = 0;
+  reconnectMillis = 0;
+}
+
+void loop() {
+  // Reset the watchdog timer to prevent reset upon normal operation
+  wdt_reset();
+
+  if (!IsClientConnected) {
+    if (!client.connected()) {
+      client.stop(); // Ensure client is disconnected
+    }
+    
+    EthernetClient newClient = server.available();
+    if (newClient) {
+      client = newClient;
+      IsClientConnected = true;
+      client.flush();
+      Serial.println("Client Connected");
+      client.println("Connected to Arduino");
+    }
+  }
+
+if (IsClientConnected) 
+{
+    if (client.available() > 0) 
+    {
+      char thisChar = client.read();
+      if (thisChar == '|') 
+      {
+        clientData = "";
+      } 
+      else if (thisChar == '%') 
+      {
+        Serial.println(clientData);
+        if (clientData.equals("OPENEN")) 
+        {
+          Serial.println("Barrier is opening");
+          digitalWrite(relayPin, LOW);
+          delay(500);
+          digitalWrite(relayPin, HIGH);
+          delay(500);
+        }
+      } else {
+        clientData += thisChar;
+      }
+    }
+    
+    // Check and send the health packet every 3 seconds
+    currentMillis = millis();
+    if (currentMillis - previousMillis >= healthPacketInterval) {
+      previousMillis = currentMillis;
+      client.println("|HLT%");
+    }
+    
+    // Check if the client is still connected, if not, attempt reconnection
+    if (!client.connected()) {
+      Serial.println("Client Disconnected");
+      IsClientConnected = false;
+      reconnectMillis = millis();
+    }
+
+    // Reconnect if the reconnect interval has passed and the Ethernet link is down
+    if (!IsClientConnected && (millis() - reconnectMillis >= reconnectInterval) && (Ethernet.linkStatus() == LinkOFF)) {
+      Serial.println("Attempting to reconnect...");
+      wdt_enable(WDTO_15MS); // Trigger a reset
+      delay(100); // Wait for reset to occur
+      server.begin(); // Restart the server
+    }
+  }
+}
+
+//EXAMPLE-2 EXIT gATE
+#include <SPI.h>
+#include <Ethernet.h>
+
+#define relayPin 9
+
+byte mac[] = {0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED};
+IPAddress ip(192, 168, 1, 151);
+
+EthernetServer server(7000);
+EthernetClient client;
+
+String clientData = "";
+
+boolean IsClientConnected = false;
+
+unsigned long currentMillis, previousMillis, reconnectMillis;
+const unsigned long healthPacketInterval = 3000; // 3 seconds
+const unsigned long reconnectInterval = 5000;   // 5 seconds
+
+void setup() {
+  Ethernet.begin(mac, ip);
+  server.begin();
+  Serial.begin(9600);
+
+  while (!Serial) {
+    ; // wait for the serial port to connect, needed for native USB port only
+  }
+
+  Serial.print("Machine Gate IP: ");
+  Serial.println(Ethernet.localIP());
+
+  pinMode(relayPin, OUTPUT);
+  digitalWrite(relayPin, HIGH);
+
+  // Enable the watchdog timer to reset the Arduino upon power interruption
+
+  IsClientConnected = false;
+
+  currentMillis = 0;
+  previousMillis = 0;
+  reconnectMillis = 0;
+}
+
+void loop() {
+
+  if (!IsClientConnected) {
+    if (!client.connected()) {
+      client.stop(); // Ensure client is disconnected
+    }
+    
+    EthernetClient newClient = server.available();
+    if (newClient) {
+      client = newClient;
+      IsClientConnected = true;
+      client.flush();
+      Serial.println("Client Connected");
+      client.println("Connected to Arduino");
+    }
+  }
+
+if (IsClientConnected) 
+{
+    if (client.available() > 0) 
+    {
+      char thisChar = client.read();
+      if (thisChar == '|') 
+      {
+        clientData = "";
+      } 
+      else if (thisChar == '%') 
+      {
+        Serial.println(clientData);
+        if (clientData.equals("OPENEX")) 
+        {
+          Serial.println("Barrier is opening");
+          digitalWrite(relayPin, LOW);
+          delay(500);
+          digitalWrite(relayPin, HIGH);
+          delay(500);
+        }
+      } else {
+        clientData += thisChar;
+      }
+    }
+    
+    // Check and send the health packet every 3 seconds
+    currentMillis = millis();
+    if (currentMillis - previousMillis >= healthPacketInterval) {
+      previousMillis = currentMillis;
+      client.println("|HLT%");
+    }
+    
+    // Check if the client is still connected, if not, attempt reconnection
+    if (!client.connected()) {
+      Serial.println("Client Disconnected");
+      IsClientConnected = false;
+      reconnectMillis = millis();
+    }
+
+    // Reconnect if the reconnect interval has passed and the Ethernet link is down
+    if (!IsClientConnected && (millis() - reconnectMillis >= reconnectInterval) && (Ethernet.linkStatus() == LinkOFF)) {
+      Serial.println("Attempting to reconnect...");
+      delay(100); // Wait for reset to occur
+      server.begin(); // Restart the server
+    }
+  }
+}
